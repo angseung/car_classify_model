@@ -6,9 +6,12 @@ from torch import nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision.models import resnet18
+from torchvision.io import read_image
 from torchvision import transforms
+from torchvision.datasets import ImageFolder
 from torchinfo import summary
 from tqdm import tqdm
+from PIL import Image
 from dataloader import get_torch_dataloader
 
 curr_os = platform.system()
@@ -23,11 +26,11 @@ elif "Linux" in curr_os:
 
 config = {
     "model" : "resnet18",
-    "max_epoch": 200,
+    "max_epoch": 10,
     "initial_lr": 0.001,
     "train_batch_size": 64,
     "dataset": "custom",
-    "train_resume": False,
+    "train_resume": True,
     "set_random_seed": True,
     "l2_reg": 0.0,
 }
@@ -48,6 +51,7 @@ trainloader = DataLoader(train_dataset, batch_size=config["train_batch_size"], s
 model = resnet18(weights=None)
 n_classes = len(train_dataset.classes)
 model.fc = nn.Linear(model.fc.in_features, n_classes)
+
 
 # Training
 def train(epoch, dir_path=None, plotter=None) -> None:
@@ -101,9 +105,21 @@ def save_model(dir_path: str = None) -> None:
         os.mkdir(dir_path)
     torch.save(state, "./" + dir_path + "/ckpt.pth")
 
-    # best_acc = acc
+
+def model_inference(model, test_dir: str = "./data/test") -> None:
+    model = model.to(device)
+    img_list = os.listdir(test_dir)
+
+    for fname in img_list:
+        img = Image.open(f"{test_dir}/{fname}")
+        img= transform_train(img)[None, :, :, :].to(device)
+        inference = model(img)
+        print(inference)
+
+    return inference
 
 
+start_epoch = 0
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(
     model.parameters(), lr=config["initial_lr"], weight_decay=config["l2_reg"]
@@ -116,14 +132,28 @@ model_name = config["model"]
 if not os.path.exists(f"./outputs/{model_name}"):
     os.makedirs(f"./outputs/{model_name}")
 
+test_dir = "./data/test"
+
 with open(f"./outputs/{model_name}/log.txt", "w") as f:
     f.write(f"Networks : {model_name}\n")
     f.write(f"Net Train Configs: \n {json.dumps(config)}\n")
     m_info = summary(model, (1, 3, input_size, input_size), verbose=0)
     f.write(f"{str(m_info)}\n")
 
-for epoch in range(config["max_epoch"]):
+if config["train_resume"]:
+    # Load checkpoint.
+    checkpoint = torch.load(f"outputs/{model_name}/ckpt.pth")
+    model.load_state_dict(checkpoint["net"])
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    # best_acc = checkpoint["acc"]
+    start_epoch = checkpoint["epoch"] + 1
+    print(f"==> Resuming from checkpoint..., epoch: {start_epoch}")
+
+for epoch in range(start_epoch, config["max_epoch"]):
     model = model.to(device)
     train(epoch, model_name)
     save_model(f"./outputs/{model_name}")
     scheduler.step()
+
+model_inference(model, test_dir=test_dir)
