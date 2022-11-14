@@ -1,3 +1,4 @@
+import os
 import platform
 import torch
 from torch import nn
@@ -19,6 +20,7 @@ elif "Linux" in curr_os:
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 config = {
+    "model" : "resnet18",
     "max_epoch": 200,
     "initial_lr": 0.001,
     "train_batch_size": 64,
@@ -92,7 +94,11 @@ scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
     optimizer, T_max=int(config["max_epoch"] * 1.0)
 )
 
+model_name = config["model"]
+if not os.path.exists(f"./outputs/{model_name}"):
+    os.makedirs(f"./outputs/{model_name}")
+
 for epoch in range(config["max_epoch"]):
     model = model.to(device)
-    train(epoch, "netkey")
+    train(epoch, model_name)
     scheduler.step()
