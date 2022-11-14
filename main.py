@@ -42,7 +42,7 @@ transform_train = transforms.Compose([transforms.ToTensor(),
                                       transforms.RandomCrop(input_size),
                                       normalize])
 
-train_dataset = get_torch_dataloader("./data_reordered", transform=transform_train)
+train_dataset = get_torch_dataloader(base_dir="./data", target_dir="./data_reordered", transform=transform_train)
 trainloader = DataLoader(train_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0)
 
 model = resnet18(weights=None)
