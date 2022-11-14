@@ -1,11 +1,13 @@
 import os
 import platform
+import json
 import torch
 from torch import nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from torchvision.models import resnet18
 from torchvision import transforms
+from torchinfo import summary
 from tqdm import tqdm
 from dataloader import get_torch_dataloader
 
@@ -79,11 +81,27 @@ def train(epoch, dir_path=None, plotter=None) -> None:
 
     with open("outputs/" + dir_path + "/log.txt", "a") as f:
         f.write(
-            "Epoch [%d] |Train| Loss: %.3f, Acc: %.3f \t"
+            "Epoch [%d] |Train| Loss: %.3f, Acc: %.3f \n"
             % (epoch, train_loss / (batch_idx + 1), 100.0 * correct / total)
         )
 
     return (epoch, train_loss / (batch_idx + 1), 100.0 * correct / total)
+
+
+def save_model(dir_path: str = None) -> None:
+    print("Saving..")
+    state = {
+        "net": model.state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict(),
+        # "acc": acc,
+        "epoch": epoch,
+    }
+    if not os.path.isdir(dir_path):
+        os.mkdir(dir_path)
+    torch.save(state, "./" + dir_path + "/ckpt.pth")
+
+    # best_acc = acc
 
 
 criterion = nn.CrossEntropyLoss()
@@ -98,7 +116,14 @@ model_name = config["model"]
 if not os.path.exists(f"./outputs/{model_name}"):
     os.makedirs(f"./outputs/{model_name}")
 
+with open(f"./outputs/{model_name}/log.txt", "w") as f:
+    f.write(f"Networks : {model_name}\n")
+    f.write(f"Net Train Configs: \n {json.dumps(config)}\n")
+    m_info = summary(model, (1, 3, input_size, input_size), verbose=0)
+    f.write(f"{str(m_info)}\n")
+
 for epoch in range(config["max_epoch"]):
     model = model.to(device)
     train(epoch, model_name)
+    save_model(f"./outputs/{model_name}")
     scheduler.step()
