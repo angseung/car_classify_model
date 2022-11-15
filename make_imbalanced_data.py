@@ -25,7 +25,10 @@ for json_file in os.listdir(f"{base_dir}/labels/annotations"):
             if not os.path.isdir(f"{target_dir}/labels/annotations"):
                 os.makedirs(f"{target_dir}/labels/annotations")
 
-            shutil.copy(f"{base_dir}/labels/annotations/{json_file}", f"{target_dir}/labels/annotations/{json_file}")
+            shutil.copy(
+                f"{base_dir}/labels/annotations/{json_file}",
+                f"{target_dir}/labels/annotations/{json_file}",
+            )
             shutil.copy(f"{base_dir}/images/{f_name}", f"{target_dir}/images/{f_name}")
 
             num_samples_per_label_done[curr_label] += 1

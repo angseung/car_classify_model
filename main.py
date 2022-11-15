@@ -18,14 +18,14 @@ curr_os = platform.system()
 print("Current OS : %s" % curr_os)
 
 if "Windows" in curr_os:
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 elif "Darwin" in curr_os:
     device = "mps" if torch.backends.mps.is_available() else "cpu"
 elif "Linux" in curr_os:
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device = "cuda" if torch.cuda.is_available() else "cpu"
 
 config = {
-    "model" : "resnet18",
+    "model": "resnet18",
     "max_epoch": 100,
     "initial_lr": 0.0015,
     "train_batch_size": 16,
@@ -41,21 +41,35 @@ input_size = 256
 normalize = transforms.Normalize(
     mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010]
 )
-transform_train = transforms.Compose([transforms.ToTensor(),
-                                    #   transforms.Resize(resize_size),
-                                      transforms.RandomCrop(input_size),
-                                      normalize])
+transform_train = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        #   transforms.Resize(resize_size),
+        transforms.RandomCrop(input_size),
+        normalize,
+    ]
+)
 
-transform_test = transforms.Compose([transforms.ToTensor(),
-                                    #   transforms.Resize(resize_size),
-                                      transforms.CenterCrop(input_size),
-                                      normalize])
+transform_test = transforms.Compose(
+    [
+        transforms.ToTensor(),
+        #   transforms.Resize(resize_size),
+        transforms.CenterCrop(input_size),
+        normalize,
+    ]
+)
 
-dataset = get_torch_dataloader(base_dir="./data", target_dir="./data_reordered", transform=transform_train)
+dataset = get_torch_dataloader(
+    base_dir="./data", target_dir="./data_reordered", transform=transform_train
+)
 train_dataset, test_dataset = random_split(dataset, [500, 100])
 
-trainloader = DataLoader(train_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0)
-testloader = DataLoader(test_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0)
+trainloader = DataLoader(
+    train_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0
+)
+testloader = DataLoader(
+    test_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0
+)
 
 model = resnet50(weights=None)
 n_classes = len(dataset.classes)
@@ -170,7 +184,7 @@ def model_inference(model, test_dir: str = "./data/test") -> None:
 
     for fname in img_list:
         img = Image.open(f"{test_dir}/{fname}")
-        img= transform_test(img)[None, :, :, :].to(device)
+        img = transform_test(img)[None, :, :, :].to(device)
         inference = model(img)
 
         print(torch.argmax(inference, axis=1))
