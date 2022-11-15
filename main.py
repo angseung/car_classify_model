@@ -4,7 +4,7 @@ import json
 import torch
 from torch import nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torchvision.models import resnet18, resnet50
 from torchvision.io import read_image
 from torchvision import transforms
@@ -27,14 +27,15 @@ elif "Linux" in curr_os:
 config = {
     "model" : "resnet18",
     "max_epoch": 100,
-    "initial_lr": 0.001,
+    "initial_lr": 0.0015,
     "train_batch_size": 16,
     "dataset": "custom",
     "train_resume": False,
     "set_random_seed": True,
-    "l2_reg": 0.0005,
+    "l2_reg": 0.00075,
 }
 
+best_acc = 0
 input_size = 256
 # resize_size = (int(input_size * 1.46), input_size)
 normalize = transforms.Normalize(
@@ -45,11 +46,19 @@ transform_train = transforms.Compose([transforms.ToTensor(),
                                       transforms.RandomCrop(input_size),
                                       normalize])
 
-train_dataset = get_torch_dataloader(base_dir="./data", target_dir="./data_reordered", transform=transform_train)
+transform_test = transforms.Compose([transforms.ToTensor(),
+                                    #   transforms.Resize(resize_size),
+                                      transforms.CenterCrop(input_size),
+                                      normalize])
+
+dataset = get_torch_dataloader(base_dir="./data", target_dir="./data_reordered", transform=transform_train)
+train_dataset, test_dataset = random_split(dataset, [500, 100])
+
 trainloader = DataLoader(train_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0)
+testloader = DataLoader(test_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0)
 
 model = resnet50(weights=None)
-n_classes = len(train_dataset.classes)
+n_classes = len(dataset.classes)
 model.fc = nn.Linear(model.fc.in_features, n_classes)
 
 
@@ -85,11 +94,60 @@ def train(epoch, dir_path=None, plotter=None) -> None:
 
     with open("outputs/" + dir_path + "/log.txt", "a") as f:
         f.write(
-            "Epoch [%d] |Train| Loss: %.3f, Acc: %.3f \n"
+            "Epoch [%d] |Train| Loss: %.3f, Acc: %.3f \t"
             % (epoch, train_loss / (batch_idx + 1), 100.0 * correct / total)
         )
 
-    return (epoch, train_loss / (batch_idx + 1), 100.0 * correct / total)
+
+def test(epoch, dir_path=None, plotter=None) -> None:
+    global best_acc
+    model.eval()
+    test_loss = 0
+    correct = 0
+    total = 0
+
+    if dir_path is None:
+        dir_path = "outputs/checkpoint"
+    else:
+        dir_path = "outputs/" + dir_path
+
+    with torch.no_grad():
+        with tqdm(testloader, unit="batch") as tepoch:
+            for batch_idx, (inputs, targets) in enumerate(tepoch):
+                tepoch.set_description(f"Test Epoch {epoch}")
+
+                inputs, targets = inputs.to(device), targets.to(device)
+                outputs = model(inputs)
+                loss = criterion(outputs, targets)
+
+                test_loss += loss.item()
+                _, predicted = outputs.max(1)
+                total += targets.size(0)
+                correct += predicted.eq(targets).sum().item()
+
+                tepoch.set_postfix(
+                    loss=test_loss / (batch_idx + 1), accuracy=100.0 * correct / total
+                )
+    acc = 100.0 * correct / total
+
+    # Save checkpoint.
+    if acc > best_acc:
+        print("Saving..")
+        state = {
+            "net": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "scheduler": scheduler.state_dict(),
+            "acc": acc,
+            "epoch": epoch,
+        }
+        if not os.path.isdir(dir_path):
+            os.mkdir(dir_path)
+        torch.save(state, "./" + dir_path + "/ckpt.pth")
+
+        best_acc = acc
+
+    with open(dir_path + "/log.txt", "a") as f:
+        f.write("|Test| Loss: %.3f, Acc: %.3f \n" % (test_loss / (batch_idx + 1), acc))
 
 
 def save_model(dir_path: str = None) -> None:
@@ -112,7 +170,7 @@ def model_inference(model, test_dir: str = "./data/test") -> None:
 
     for fname in img_list:
         img = Image.open(f"{test_dir}/{fname}")
-        img= transform_train(img)[None, :, :, :].to(device)
+        img= transform_test(img)[None, :, :, :].to(device)
         inference = model(img)
 
         print(torch.argmax(inference, axis=1))
@@ -154,8 +212,8 @@ if config["train_resume"]:
 for epoch in range(start_epoch, config["max_epoch"]):
     model = model.to(device)
     train(epoch, model_name)
-    save_model(f"./outputs/{model_name}")
+    test(epoch, model_name)
+    # save_model(f"./outputs/{model_name}")
     scheduler.step()
 
 model_inference(model, test_dir=test_dir)
-# print(model)

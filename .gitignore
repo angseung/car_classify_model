@@ -140,3 +140,4 @@ autograd_test.py
 cifar-10
 *.zip
 data_reordered
+cifar10_tutorial.ipynb
