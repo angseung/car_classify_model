@@ -5,7 +5,7 @@ import torch
 from torch import nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision.models import resnet18
+from torchvision.models import resnet18, resnet50
 from torchvision.io import read_image
 from torchvision import transforms
 from torchvision.datasets import ImageFolder
@@ -26,29 +26,29 @@ elif "Linux" in curr_os:
 
 config = {
     "model" : "resnet18",
-    "max_epoch": 10,
+    "max_epoch": 100,
     "initial_lr": 0.001,
-    "train_batch_size": 64,
+    "train_batch_size": 16,
     "dataset": "custom",
-    "train_resume": True,
+    "train_resume": False,
     "set_random_seed": True,
-    "l2_reg": 0.0,
+    "l2_reg": 0.0005,
 }
 
-input_size = 224
-resize_size = (int(input_size * 1.46), input_size)
+input_size = 256
+# resize_size = (int(input_size * 1.46), input_size)
 normalize = transforms.Normalize(
     mean=[0.4914, 0.4822, 0.4465], std=[0.2023, 0.1994, 0.2010]
 )
 transform_train = transforms.Compose([transforms.ToTensor(),
-                                      transforms.Resize(resize_size),
+                                    #   transforms.Resize(resize_size),
                                       transforms.RandomCrop(input_size),
                                       normalize])
 
 train_dataset = get_torch_dataloader(base_dir="./data", target_dir="./data_reordered", transform=transform_train)
 trainloader = DataLoader(train_dataset, batch_size=config["train_batch_size"], shuffle=True, num_workers=0)
 
-model = resnet18(weights=None)
+model = resnet50(weights=None)
 n_classes = len(train_dataset.classes)
 model.fc = nn.Linear(model.fc.in_features, n_classes)
 
@@ -114,7 +114,8 @@ def model_inference(model, test_dir: str = "./data/test") -> None:
         img = Image.open(f"{test_dir}/{fname}")
         img= transform_train(img)[None, :, :, :].to(device)
         inference = model(img)
-        print(inference)
+
+        print(torch.argmax(inference, axis=1))
 
     return inference
 
@@ -157,3 +158,4 @@ for epoch in range(start_epoch, config["max_epoch"]):
     scheduler.step()
 
 model_inference(model, test_dir=test_dir)
+# print(model)
